@@ -303,7 +303,7 @@
     }
 
     async function syncFromGitHub() {
-        const githubRawUrl = 'https://raw.githubusercontent.com/PaulRClay/19Dunfield/main/stations.txt';
+        const githubRawUrl = 'https://github.com/PaulRClay/19Dunfield/blob/main/Stations.txt';
         try {
             const response = await fetch(githubRawUrl);
             if (!response.ok) throw new Error('Could not fetch file');
@@ -461,4 +461,5 @@
     loadHub();
 </script>
 </body>
+
 </html>
