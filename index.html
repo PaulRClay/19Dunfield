@@ -85,9 +85,9 @@
 <div id="interactionOverlay">
     <div id="overlayBox">
         <h2 style="font-weight: 400; font-size: 1.2rem; margin-bottom: 10px; color: #fff;">2026 LIVE Media HUB</h2>
-        <p style="color: #666; font-size: 0.75rem; margin-bottom: 30px;">To ensure your blacklist is active, link your data file before initializing.</p>
-        <button id="initialLinkBtn" class="mandatory-btn" onclick="connectToFile()">
-            <i data-lucide="link" style="color: #64b5f6;"></i> <span>Link Stations.txt</span>
+        <p style="color: #666; font-size: 0.75rem; margin-bottom: 30px;">To ensure your blacklist is active, sync with GitHub before initializing.</p>
+        <button id="initialLinkBtn" class="mandatory-btn" onclick="syncFromGitHub()">
+            <i data-lucide="cloud-download" style="color: #64b5f6;"></i> <span>Sync Stations.txt</span>
         </button>
         <button id="startBtn" class="mandatory-btn" onclick="handleInteraction()">
             <i data-lucide="power" style="color: #fff;"></i> <span>Initialize Hub</span>
@@ -112,7 +112,7 @@
                     <i data-lucide="shield-off" style="width:14px; color:#ff8a80"></i> Blocked channels are hidden.
                 </li>
             </ul>
-            <p>3. THE LINK SYSTEM: Link <i data-lucide="link" style="width:14px; color:#64b5f6; vertical-align: middle; margin: 0 2px;"></i> your blacklist.txt to auto-save preferences locally.</p>
+            <p>3. THE SYNC SYSTEM: Sync <i data-lucide="cloud-download" style="width:14px; color:#64b5f6; vertical-align: middle; margin: 0 2px;"></i> with GitHub to load your remote stations list. No data is saved locally.</p>
             <h4 style="color: #444; border-bottom: 1px solid #333; padding-bottom: 5px; margin-top: 20px;">QUICK KEYS / SHORTCUTS</h4>
             <div class="shortcut-grid" style="margin-top: 10px;">
                 <span class="key-cap">J / ↓</span> <span>Next Channel</span>
@@ -189,7 +189,7 @@
             <button class="action-btn" onclick="openModal('guideModal')"><i data-lucide="book-open" style="color: #ce93d8;"></i> <span>Guide</span></button>
             <button class="action-btn" onclick="openModal('legalModal')"><i data-lucide="scale" style="color: #fff;"></i> <span>Legal</span></button>
             <button class="action-btn" onclick="openModal('blacklistModal')"><i data-lucide="shield-off" style="color: #ff8a80;"></i> <span>Blacklist</span></button>
-            <button class="action-btn" id="linkBtn" onclick="connectToFile()"><i data-lucide="link" style="color: #64b5f6;"></i> <span>Linked</span></button>
+            <button class="action-btn" id="linkBtn" onclick="syncFromGitHub()"><i data-lucide="cloud-download" style="color: #64b5f6;"></i> <span>Sync</span></button>
             <button class="action-btn" id="maxBtn" onclick="toggleMax()"><i data-lucide="maximize" style="color: #fff;"></i> <span>Max</span></button>
         </div>
     </div>
@@ -209,7 +209,6 @@
     
     let hls = new Hls({ enableSubtitle: false, enableVtt: false, renderTextTracks: false }); 
     let currentChannel = null;
-    let fileHandle = null;
     let blacklist = [];
     let favorites = [];
     let allStations = []; 
@@ -301,34 +300,27 @@
         blacklist = blacklist.filter(n => n.toLowerCase() !== name.toLowerCase());
         renderBlacklist();
         refreshList();
-        await saveToFile();
     }
 
-    async function connectToFile() {
+    async function syncFromGitHub() {
+        const githubRawUrl = 'https://raw.githubusercontent.com/PaulRClay/19Dunfield/main/stations.txt';
         try {
-            const [handle] = await window.showOpenFilePicker({ mode: 'readwrite', types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }] });
-            fileHandle = handle;
-            const file = await fileHandle.getFile();
-            const text = await file.text();
+            const response = await fetch(githubRawUrl);
+            if (!response.ok) throw new Error('Could not fetch file');
+            const text = await response.text();
             const lines = text.split(/\r?\n/).map(line => line.trim()).filter(l => l.length > 0);
             favorites = lines.filter(l => l.startsWith('[FAV]')).map(l => l.replace('[FAV]', '').trim());
             blacklist = lines.filter(l => !l.startsWith('[FAV]')).map(l => l.trim());
+            
             initialLinkBtn.classList.add('linked');
-            initialLinkBtn.innerHTML = '<i data-lucide="check-circle" style="color: #4caf50;"></i> <span>Connected</span>';
+            initialLinkBtn.innerHTML = '<i data-lucide="cloud-check" style="color: #4caf50;"></i> <span>Synced</span>';
             startBtn.style.display = 'flex';
             refreshList();
             updateIcons();
-        } catch (e) {}
-    }
-
-    async function saveToFile() {
-        if (!fileHandle) return;
-        try {
-            const writable = await fileHandle.createWritable();
-            const content = [...favorites.map(f => `[FAV]${f}`), ...blacklist].join('\n');
-            await writable.write(content);
-            await writable.close();
-        } catch (err) {}
+        } catch (e) {
+            console.error("Sync error:", e);
+            alert("Sync failed. Ensure your GitHub URL is correct.");
+        }
     }
 
     async function toggleFav(e, name) {
@@ -337,7 +329,6 @@
         if (isFav) favorites = favorites.filter(f => f.toLowerCase() !== name.toLowerCase());
         else favorites.push(name);
         refreshList();
-        await saveToFile();
     }
 
     async function block(e, name) {
@@ -345,7 +336,6 @@
         if (!blacklist.some(b => b.toLowerCase() === name.toLowerCase())) { 
             blacklist.push(name); 
             refreshList(); 
-            await saveToFile();
         }
     }
 
