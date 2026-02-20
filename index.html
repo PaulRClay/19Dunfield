@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Media Hub - Copyright © 2026 Paul R. Clay</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom Scrollbar Styling */
+        ::-webkit-scrollbar { width: 10px; background-color: #141414; }
+        ::-webkit-scrollbar-track { background: #141414; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; border: 2px solid #141414; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+        * { scrollbar-width: thin; scrollbar-color: #333 #141414; }
+
+        body { font-family: 'Segoe UI', sans-serif; background: #0b0b0b; color: #efefef; margin: 0; display: flex; height: 100vh; overflow: hidden; font-weight: 400; }
+        
+        #sidebar { width: 320px; min-width: 320px; max-width: 320px; background: #141414; border-right: 1px solid #222; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 10px; background: #1c1c1c; border-bottom: 1px solid #333; }
+        
+        .sidebar-header h2 { margin: 0 0 5px 0; font-size: 0.75rem; letter-spacing: 2px; color: #888; font-weight: 400 !important; }
+        
+        .search-wrapper { position: relative; width: 100%; display: flex; align-items: center; }
+        #searchBar, #blacklistSearch { width: 100%; padding: 8px 30px 8px 8px; background: #000; border: 1px solid #444; color: white; border-radius: 3px; box-sizing: border-box; font-size: 0.75rem; font-weight: 400; }
+        #clearSearch { position: absolute; right: 8px; background: transparent; border: none; color: #81d4fa; cursor: pointer; display: none; padding: 0; align-items: center; justify-content: center; }
+
+        #stationList { flex-grow: 1; overflow-y: auto; padding: 5px; scroll-behavior: smooth; }
+        
+        .station-btn { display: flex; flex-direction: column; width: 100%; padding: 4px 10px; margin-bottom: 1px; background: #1a1a1a; color: #999; border: none; text-align: left; cursor: pointer; border-radius: 2px; font-size: 0.8rem; transition: background 0.1s; border-left: 3px solid transparent; font-weight: 400; }
+        .station-btn.active { border-left: 3px solid #d32f2f; background: #252525; color: #fff; }
+        .station-btn:hover { background: #222; }
+        
+        .btn-top { display: flex; justify-content: space-between; width: 100%; align-items: center; pointer-events: none; }
+        .tag-container { display: flex; gap: 8px; align-items: center; pointer-events: auto; }
+        .tag { font-size: 0.7rem; color: inherit; background: none; padding: 0; border-radius: 0; display: inline; font-weight: 400; }
+        
+        .fav-toggle { cursor: pointer; color: #666; padding: 0 4px; transition: color 0.2s; display: flex; align-items: center; }
+        .fav-toggle.is-fav { color: #fff59d !important; } 
+        
+        .remove-btn { background: transparent; color: #ff8a80; cursor: pointer; padding: 2px 4px; transition: all 0.2s ease; border: none; display: flex; align-items: center; }
+        .remove-btn:hover { color: #ff5252; transform: scale(1.1); }
+
+        .sidebar-footer { padding: 10px; font-size: 0.65rem; color: #888; border-top: 1px solid #222; text-align: center; letter-spacing: 1px; font-weight: 400; background: #1c1c1c; }
+
+        /* POPUP STYLING */
+        #guideModal, #legalModal, #blacklistModal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; z-index: 600; align-items: center; justify-content: center; }
+        .modal-content { background: #1c1c1c; border: 1px solid #444; border-radius: 4px; display: flex; flex-direction: column; font-weight: 400; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+        .modal-header-top { display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        
+        #blacklistItems { overflow-y: auto; padding: 10px; flex-grow: 1; }
+        .blacklist-item { display: flex; justify-content: space-between; padding: 8px 10px; background: #1a1a1a; margin-bottom: 2px; font-size: 0.7rem; border-radius: 2px; align-items: center; color: #999; }
+        .unblock-btn { background: transparent; border: none; color: #81d4fa; cursor: pointer; display: flex; align-items: center; padding: 4px; }
+
+        /* Guide Specific Styles */
+        .key-cap { background: #333; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; border-bottom: 2px solid #000; margin-right: 10px; display: inline-block; min-width: 20px; text-align: center; }
+        .shortcut-grid { display: grid; grid-template-columns: 80px 1fr; gap: 10px; align-items: center; }
+
+        #main-content { flex-grow: 1; background: #000; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .video-wrapper { flex-grow: 1; display: flex; align-items: center; justify-content: center; position: relative; background: #000; }
+        video { width: 90%; max-width: 1000px; aspect-ratio: 16/9; background: #000; box-shadow: 0 0 40px rgba(0,0,0,0.5); z-index: 1; }
+        
+        #radioOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; text-align: center; }
+        .radio-icon-large { color: #d32f2f; width: 120px; height: 120px; opacity: 0.8; animation: pulse 3s infinite ease-in-out; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.1); opacity: 0.9; } 100% { transform: scale(1); opacity: 0.5; } }
+        
+        #interactionOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 500; }
+        #overlayBox { background: #141414; padding: 40px; border: 1px solid #333; border-radius: 8px; text-align: center; max-width: 400px; width: 100%; }
+
+        .mandatory-btn { width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; font-family: 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        #initialLinkBtn { background: #222; border: 1px solid #444; color: #64b5f6; }
+        #initialLinkBtn.linked { border-color: #4caf50; color: #4caf50; cursor: default; }
+        #startBtn { background: #d32f2f; border: 1px solid #d32f2f; color: white; display: none; }
+        
+        .info-panel { height: 75px; background: #0f0f0f; border-top: 1px solid #222; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        #channelDisplay { font-size: 0.8rem; text-transform: uppercase; color: #d32f2f; letter-spacing: 1px; margin-bottom: 2px; }
+        
+        .control-btns { display: flex; gap: 6px; align-items: center; }
+        .action-btn { color: #fff; border: 1px solid #333; background: transparent; min-width: 85px; padding: 0 8px; height: 32px; cursor: pointer; border-radius: 2px; font-size: 0.55rem; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s ease; }
+        
+        .close-btn { color: #fff; background: #444; width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<div id="interactionOverlay">
+    <div id="overlayBox">
+        <h2 style="font-weight: 400; font-size: 1.2rem; margin-bottom: 10px; color: #fff;">2026 LIVE Media HUB</h2>
+        <p style="color: #666; font-size: 0.75rem; margin-bottom: 30px;">To ensure your blacklist is active, link your data file before initializing.</p>
+        <button id="initialLinkBtn" class="mandatory-btn" onclick="connectToFile()">
+            <i data-lucide="link" style="color: #64b5f6;"></i> <span>Link Stations.txt</span>
+        </button>
+        <button id="startBtn" class="mandatory-btn" onclick="handleInteraction()">
+            <i data-lucide="power" style="color: #fff;"></i> <span>Initialize Hub</span>
+        </button>
+    </div>
+</div>
+
+<div id="guideModal">
+    <div class="modal-content" style="padding: 25px; width: 550px;">
+        <div class="modal-header-top">
+            <h3 style="margin:0; font-size: 1rem; color: #555; letter-spacing: 2px;">USER INTERFACE GUIDE</h3>
+            <button class="close-btn" onclick="closeModal('guideModal')"><i data-lucide="x" style="width:16px;"></i></button>
+        </div>
+        <div style="font-size: 0.8rem; line-height: 1.6; margin-top: 20px; color: #aaa; overflow-y: auto; max-height: 70vh;">
+            <p>1. INITIALIZING: Click the red Start button to begin. Browsers often block sound until you interact with the page.</p>
+            <p>2. CHANNEL MANAGEMENT:</p>
+            <ul style="padding-left: 20px; list-style: none;">
+                <li style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+                    <i data-lucide="star" style="width:14px; color:#fff59d"></i> Favorites are pinned to the top.
+                </li>
+                <li style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="shield-off" style="width:14px; color:#ff8a80"></i> Blocked channels are hidden.
+                </li>
+            </ul>
+            <p>3. THE LINK SYSTEM: Link <i data-lucide="link" style="width:14px; color:#64b5f6; vertical-align: middle; margin: 0 2px;"></i> your blacklist.txt to auto-save preferences locally.</p>
+            <h4 style="color: #444; border-bottom: 1px solid #333; padding-bottom: 5px; margin-top: 20px;">QUICK KEYS / SHORTCUTS</h4>
+            <div class="shortcut-grid" style="margin-top: 10px;">
+                <span class="key-cap">J / ↓</span> <span>Next Channel</span>
+                <span class="key-cap">K / ↑</span> <span>Previous Channel</span>
+                <span class="key-cap">W / S</span> <span>Volume Control</span>
+                <span class="key-cap">Space</span> <span>Pause / Play</span>
+                <span class="key-cap">F</span> <span>Fullscreen</span>
+                <span class="key-cap">/</span> <span>Search Focus</span>
+            </div>
+            <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+            <p>• Radio mode shows a pulsing icon in place of video.<br>
+               • CBC TV Newfoundland and CBC Radio One are the auto-start defaults.<br>
+               • Global stations have been removed from the list.</p>
+        </div>
+    </div>
+</div>
+
+<div id="legalModal">
+    <div class="modal-content" style="padding: 25px; width: 550px;">
+        <div class="modal-header-top">
+            <h3 style="margin:0; font-size: 1rem; color: #555; letter-spacing: 2px;">LEGAL AGREEMENT</h3>
+            <button class="close-btn" onclick="closeModal('legalModal')"><i data-lucide="x" style="width:16px;"></i></button>
+        </div>
+        <div style="font-size: 0.85rem; line-height: 1.6; margin-top: 20px; color: #aaa;">
+            <p>The Live Media Hub application, including but not limited to its source code, interface design, custom styling, and organizational logic, is the exclusive property of Paul R. Clay.<br><br>Copyright © 2026 Paul R. Clay. All rights reserved.<br><br>Disclaimer:
+            Paul R. Clay does not host, provide, or own any video or audio content. All television and Radio feeds and streams are accessed via publicly available Uniform Resource Locator (URL) links from third-party sources, with the software solely acting as a media player and aggregator for these public streams.</p>
+        </div>
+        <button class="action-btn" style="width: 100%; height: 40px; margin-top: 15px; background: #333; color: white;" onclick="closeModal('legalModal')">I AGREE</button>
+    </div>
+</div>
+
+<div id="blacklistModal">
+    <div class="modal-content" style="padding: 25px; width: 450px; height: 60vh;">
+        <div class="modal-header-top">
+            <h3 style="margin:0; font-size: 1rem; color: #555; letter-spacing: 2px;">BLACKLIST MANAGEMENT</h3>
+            <button class="close-btn" onclick="closeModal('blacklistModal')"><i data-lucide="x" style="width:16px;"></i></button>
+        </div>
+        <div style="padding: 10px 0;"><input type="text" id="blacklistSearch" placeholder="Filter blacklisted channels..." oninput="renderBlacklist()"></div>
+        <div id="blacklistItems"></div>
+    </div>
+</div>
+
+<div id="sidebar">
+    <div class="sidebar-header">
+        <h2 id="hubHeader" style="margin-bottom: 10px;">LIVE MEDIA TV HUB</h2>
+        <div style="display: flex; width: 100%; gap: 2px; margin-bottom: 10px;">
+            <button id="tvBtn" onclick="toggleMode('TV')" style="flex: 1; height: 30px; background: #252525; color: white; border: 1px solid #d32f2f; cursor: pointer; font-size: 0.6rem; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                <i data-lucide="tv" style="width:14px;"></i> TV
+            </button>
+            <button id="radioBtn" onclick="toggleMode('RADIO')" style="flex: 1; height: 30px; background: #1a1a1a; color: #666; border: 1px solid #333; cursor: pointer; font-size: 0.6rem; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                <i data-lucide="radio" style="width:14px;"></i> RADIO
+            </button>
+        </div>
+        <div class="search-wrapper">
+            <input type="text" id="searchBar" placeholder="Search name or country..." oninput="handleSearchInput()" autofocus>
+            <button id="clearSearch" onclick="clearSearchField()"><i data-lucide="x-circle" style="width:16px;"></i></button>
+        </div>
+    </div>
+    <div id="stationList">Preparing Hub...</div>
+    <div class="sidebar-footer" id="stationCount">0 Stations</div>
+</div>
+
+<div id="main-content">
+    <div class="video-wrapper">
+        <div id="radioOverlay">
+            <i data-lucide="radio" class="radio-icon-large"></i>
+            <p style="color: #666; font-size: 0.7rem; margin-top: 15px; letter-spacing: 2px;">AUDIO STREAM ACTIVE</p>
+        </div>
+        <video id="videoPlayer" controls></video>
+    </div>
+    <div class="info-panel">
+        <div class="text-group"><div id="channelDisplay">OFFLINE</div></div>
+        <div class="control-btns">
+            <button class="action-btn" onclick="openModal('guideModal')"><i data-lucide="book-open" style="color: #ce93d8;"></i> <span>Guide</span></button>
+            <button class="action-btn" onclick="openModal('legalModal')"><i data-lucide="scale" style="color: #fff;"></i> <span>Legal</span></button>
+            <button class="action-btn" onclick="openModal('blacklistModal')"><i data-lucide="shield-off" style="color: #ff8a80;"></i> <span>Blacklist</span></button>
+            <button class="action-btn" id="linkBtn" onclick="connectToFile()"><i data-lucide="link" style="color: #64b5f6;"></i> <span>Linked</span></button>
+            <button class="action-btn" id="maxBtn" onclick="toggleMax()"><i data-lucide="maximize" style="color: #fff;"></i> <span>Max</span></button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('videoPlayer');
+    const radioOverlay = document.getElementById('radioOverlay');
+    const searchBar = document.getElementById('searchBar');
+    const clearBtn = document.getElementById('clearSearch');
+    const listContainer = document.getElementById('stationList');
+    const channelDisplay = document.getElementById('channelDisplay');
+    const overlay = document.getElementById('interactionOverlay');
+    const startBtn = document.getElementById('startBtn');
+    const initialLinkBtn = document.getElementById('initialLinkBtn');
+    const stationCount = document.getElementById('stationCount');
+    
+    let hls = new Hls({ enableSubtitle: false, enableVtt: false, renderTextTracks: false }); 
+    let currentChannel = null;
+    let fileHandle = null;
+    let blacklist = [];
+    let favorites = [];
+    let allStations = []; 
+    let allRadioStations = []; 
+    let currentMode = 'TV';
+
+    function updateIcons() { lucide.createIcons({ attrs: { 'stroke-width': 1.0 } }); }
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; if(id === 'blacklistModal') renderBlacklist(); updateIcons(); }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function stopPlayback() {
+        video.pause();
+        video.src = "";
+        video.load();
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+        currentChannel = null;
+        channelDisplay.innerText = "OFFLINE";
+    }
+
+    function toggleMode(targetMode) {
+        if (currentMode === targetMode && video.src !== "") return;
+
+        stopPlayback();
+        currentMode = targetMode;
+
+        const header = document.getElementById('hubHeader');
+        const tvBtn = document.getElementById('tvBtn');
+        const radioBtn = document.getElementById('radioBtn');
+
+        if (currentMode === 'TV') {
+            header.innerText = 'LIVE MEDIA TV HUB';
+            tvBtn.style.background = '#252525';
+            tvBtn.style.color = '#fff';
+            tvBtn.style.borderColor = '#d32f2f';
+            radioBtn.style.background = '#1a1a1a';
+            radioBtn.style.color = '#666';
+            radioBtn.style.borderColor = '#333';
+
+            radioOverlay.style.display = 'none';
+            video.style.opacity = '1';
+            video.setAttribute('controls', 'true');
+            
+            const defaultChan = allStations.find(s => s.name.toLowerCase().includes("cbc") && s.name.toLowerCase().includes("newfoundland")) || allStations[0];
+            if (defaultChan) selectChannel(defaultChan);
+
+        } else {
+            header.innerText = 'LIVE RADIO HUB';
+            radioBtn.style.background = '#252525';
+            radioBtn.style.color = '#fff';
+            radioBtn.style.borderColor = '#d32f2f';
+            tvBtn.style.background = '#1a1a1a';
+            tvBtn.style.color = '#666';
+            tvBtn.style.borderColor = '#333';
+
+            radioOverlay.style.display = 'flex';
+            video.style.opacity = '0.2';
+            video.removeAttribute('controls');
+            
+            const defaultRadio = allRadioStations.find(s => s.name.toLowerCase().includes("cbc radio one")) || allRadioStations[0];
+            if (defaultRadio) selectChannel(defaultRadio);
+        }
+
+        refreshList();
+        updateIcons();
+    }
+
+    function handleSearchInput() { clearBtn.style.display = searchBar.value.length > 0 ? 'flex' : 'none'; refreshList(); }
+    function clearSearchField() { searchBar.value = ''; clearBtn.style.display = 'none'; searchBar.focus(); refreshList(); }
+    function toggleMax() { if (!document.fullscreenElement) video.requestFullscreen(); else document.exitFullscreen(); }
+
+    function renderBlacklist() {
+        const container = document.getElementById('blacklistItems');
+        const filter = document.getElementById('blacklistSearch').value.toLowerCase();
+        container.innerHTML = '';
+        blacklist.filter(name => name.toLowerCase().includes(filter)).forEach(name => {
+            const item = document.createElement('div');
+            item.className = 'blacklist-item';
+            item.innerHTML = `<span>${name}</span><button class="unblock-btn" onclick="unblock('${name.replace(/'/g, "\\'")}')"><i data-lucide="rotate-ccw" style="width:14px;"></i></button>`;
+            container.appendChild(item);
+        });
+        updateIcons();
+    }
+
+    async function unblock(name) {
+        blacklist = blacklist.filter(n => n.toLowerCase() !== name.toLowerCase());
+        renderBlacklist();
+        refreshList();
+        await saveToFile();
+    }
+
+    async function connectToFile() {
+        try {
+            const [handle] = await window.showOpenFilePicker({ mode: 'readwrite', types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }] });
+            fileHandle = handle;
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(l => l.length > 0);
+            favorites = lines.filter(l => l.startsWith('[FAV]')).map(l => l.replace('[FAV]', '').trim());
+            blacklist = lines.filter(l => !l.startsWith('[FAV]')).map(l => l.trim());
+            initialLinkBtn.classList.add('linked');
+            initialLinkBtn.innerHTML = '<i data-lucide="check-circle" style="color: #4caf50;"></i> <span>Connected</span>';
+            startBtn.style.display = 'flex';
+            refreshList();
+            updateIcons();
+        } catch (e) {}
+    }
+
+    async function saveToFile() {
+        if (!fileHandle) return;
+        try {
+            const writable = await fileHandle.createWritable();
+            const content = [...favorites.map(f => `[FAV]${f}`), ...blacklist].join('\n');
+            await writable.write(content);
+            await writable.close();
+        } catch (err) {}
+    }
+
+    async function toggleFav(e, name) {
+        e.stopPropagation();
+        const isFav = favorites.some(f => f.toLowerCase() === name.toLowerCase());
+        if (isFav) favorites = favorites.filter(f => f.toLowerCase() !== name.toLowerCase());
+        else favorites.push(name);
+        refreshList();
+        await saveToFile();
+    }
+
+    async function block(e, name) {
+        e.stopPropagation();
+        if (!blacklist.some(b => b.toLowerCase() === name.toLowerCase())) { 
+            blacklist.push(name); 
+            refreshList(); 
+            await saveToFile();
+        }
+    }
+
+    function handleInteraction() {
+        overlay.style.display = 'none';
+        video.muted = false;
+        
+        if (currentMode === 'TV') {
+            const defaultChan = allStations.find(s => s.name.toLowerCase().includes("cbc") && s.name.toLowerCase().includes("newfoundland")) || allStations[0];
+            if (defaultChan) selectChannel(defaultChan);
+        } else {
+            const defaultRadio = allRadioStations.find(s => s.name.toLowerCase().includes("cbc radio one")) || allRadioStations[0];
+            if (defaultRadio) selectChannel(defaultRadio);
+        }
+    }
+
+    function selectChannel(s) {
+        currentChannel = s.name;
+        channelDisplay.innerText = s.name;
+        play(s.url);
+        refreshList();
+    }
+
+    function refreshList() {
+        listContainer.innerHTML = '';
+        
+        let activeData = (currentMode === 'TV') ? allStations : allRadioStations;
+        const filter = searchBar.value.toLowerCase();
+        const visible = activeData.filter(s => !blacklist.some(b => b.toLowerCase() === s.name.toLowerCase()) && (s.name.toLowerCase().includes(filter) || s.country.toLowerCase().includes(filter)));
+        stationCount.innerText = `${visible.length.toLocaleString()} ${currentMode} Items`;
+        
+        visible.sort((a, b) => {
+            const aFav = favorites.some(f => f.toLowerCase() === a.name.toLowerCase());
+            const bFav = favorites.some(f => f.toLowerCase() === b.name.toLowerCase());
+            if (aFav && !bFav) return -1;
+            if (!aFav && bFav) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        visible.forEach(s => {
+            const isFav = favorites.some(f => f.toLowerCase() === s.name.toLowerCase());
+            const btn = document.createElement('button');
+            btn.className = 'station-btn' + (currentChannel === s.name ? ' active' : '');
+            btn.innerHTML = `<div class="btn-top"><span>${s.name}</span><div class="tag-container"><span class="fav-toggle ${isFav ? 'is-fav' : ''}" onclick="toggleFav(event, '${s.name.replace(/'/g, "\\'")}')"><i data-lucide="${isFav ? 'star' : 'star-off'}" style="width:14px;"></i></span><span class="tag">${s.country}</span><span class="remove-btn" onclick="block(event, '${s.name.replace(/'/g, "\\'")}')"><i data-lucide="shield-off" style="width:14px;"></i></span></div></div>`;
+            btn.onclick = () => selectChannel(s);
+            listContainer.appendChild(btn);
+        });
+        updateIcons();
+    }
+
+    async function loadHub() {
+        const tvSources = [{ url: 'https://iptv-org.github.io/iptv/countries/ca.m3u', country: 'CAN' }, { url: 'https://iptv-org.github.io/iptv/countries/us.m3u', country: 'USA' }];
+        for (const src of tvSources) {
+            try {
+                const res = await fetch(src.url);
+                const data = await res.text();
+                const lines = data.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].startsWith('#EXTINF')) {
+                        let name = lines[i].split(',')[1]?.trim();
+                        let url = lines[i+1]?.trim();
+                        if (name && url && url.startsWith('http')) {
+                            const cleanName = name.replace(/[\[\(].*?[\]\)]/g, '').trim();
+                            if (cleanName && !['#', '.', '-'].includes(cleanName[0])) {
+                                allStations.push({ name: cleanName, url, country: src.country });
+                            }
+                        }
+                    }
+                }
+            } catch (err) {}
+        }
+        
+        allRadioStations.push({ name: "VOCM 590 AM (St. John's)", url: "https://playerservices.streamtheworld.com/api/livestream-redirect/VOCMAM_SC", country: "CAN" });
+        allRadioStations.push({ name: "CBC Radio One (St. John's)", url: "https://cbcradiolive.akamaized.net/hls/live/2037435/ES_R1NSN/master.m3u8", country: "CAN" });
+
+        const radioApis = [
+            { url: 'https://de1.api.radio-browser.info/m3u/stations/search?countrycode=CA&tag=50s&limit=20', country: 'CAN' },
+            { url: 'https://de1.api.radio-browser.info/m3u/stations/search?countrycode=US&tag=50s&limit=20', country: 'USA' },
+            { url: 'https://de1.api.radio-browser.info/m3u/stations/search?countrycode=CA&tag=60s&limit=20', country: 'CAN' },
+            { url: 'https://de1.api.radio-browser.info/m3u/stations/search?countrycode=US&tag=60s&limit=20', country: 'USA' },
+            { url: 'https://de1.api.radio-browser.info/m3u/stations/search?countrycode=CA&limit=40&hidebroken=true&order=clickcount&reverse=true', country: 'CAN' },
+            { url: 'https://de1.api.radio-browser.info/m3u/stations/search?countrycode=US&limit=40&hidebroken=true&order=clickcount&reverse=true', country: 'USA' }
+        ];
+
+        for (const api of radioApis) {
+            try {
+                const res = await fetch(api.url);
+                const data = await res.text();
+                const lines = data.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].startsWith('#EXTINF')) {
+                        let name = lines[i].split(',')[1]?.trim();
+                        let url = lines[i+1]?.trim();
+                        if (name && url && url.startsWith('http') && !url.toLowerCase().endsWith('.mp3')) {
+                            const cleanName = name.replace(/[\[\(].*?[\]\)]/g, '').trim();
+                            if (cleanName && !['#', '.', '-'].includes(cleanName[0]) && !allRadioStations.some(s => s.name === cleanName)) {
+                                allRadioStations.push({ name: cleanName, url, country: api.country });
+                            }
+                        }
+                    }
+                }
+            } catch (err) {}
+        }
+        allRadioStations = allRadioStations.slice(0, 150);
+        refreshList();
+    }
+
+    function play(url) {
+        if (hls) hls.destroy();
+        
+        if (url.includes('.m3u8') || url.includes('.m3u')) {
+            if (Hls.isSupported()) {
+                hls = new Hls({ enableSubtitle: false, enableVtt: false, renderTextTracks: false });
+                hls.loadSource(url); 
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            }
+        } else {
+            video.src = url;
+            video.play();
+        }
+    }
+    loadHub();
+</script>
+</body>
+</html>
